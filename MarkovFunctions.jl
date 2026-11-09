@@ -41,7 +41,7 @@ function SimulateChain(initial::AbstractVector{Float64}, P::AbstractMatrix{Float
     end
 
     # Validate All Matrix Rows
-    for r in 1:rows
+    for r in 1:size(P, 1)
         if !(sum(@view P[r, :]) ≈ 1.0)
             throw(ArgumentError("Row $r in the transition matrix does not add to 1"))
         end
