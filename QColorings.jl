@@ -5,7 +5,7 @@ module QColorings
 
 using Graphs
 
-export is_proper, greedy_coloring, random_site_sweep!, estimate_num_colorings
+export is_proper, greedy_coloring, random_site_steps!, systematic_sweep!, estimate_num_colorings
 
 # ¿Es un q-coloreo válido? (ninguna arista une dos vértices del mismo color)
 function is_proper(g::AbstractGraph, coloring::Vector{Int})
@@ -39,19 +39,39 @@ function greedy_coloring(g::AbstractGraph, q::Int)
     return coloring
 end
 
-# Un "barrido": k = nv(g) pasos del Gibbs sampler del Ejemplo 7.3.
-# Cada paso: (1) escoge un vértice v al azar, (2) le pone un color al azar
-# entre los que NO usan sus vecinos, (3) deja los demás vértices igual.
-function random_site_sweep!(g::AbstractGraph, coloring::Vector{Int}, q::Int, used::BitVector)
-    for _ in 1:nv(g)
+#Takes the specified number of steps on the random site Gibbs sampler
+function random_site_steps!(g::AbstractGraph, coloring::Vector{Int}, used::BitVector, steps::Int)
+    for i in 1:steps
+        #Choose a random vertex v
         v = rand(1:nv(g))
         fill!(used, false)
+
+        #Check for used colors among neighbors, then color v with a random free one
         for w in neighbors(g, v)
             used[coloring[w]] = true
         end
         free = findall(==(false), used)
         coloring[v] = rand(free)
     end
+
+    #Return mutated coloring, it only changed for vertex v
+    return coloring
+end
+
+#One sweep (nv(g) steps) for the systematic Gibbs sampler
+function systematic_sweep!(g::AbstractGraph, coloring::Vector{Int}, used::BitVector)
+    for i in 1:nv(g)
+        fill!(used, false)
+        
+        #Check for used colors among neighbors, then color vertex i with a random free one
+        for w in neighbors(g, i)
+            used[coloring[w]] = true
+        end
+        free = findall(==(false), used)
+        coloring[i] = rand(free)
+    end
+
+    #Return mutated coloring
     return coloring
 end
 
@@ -75,12 +95,13 @@ function estimate_num_colorings(g::AbstractGraph, q::Int;
         x, y = src(e), dst(e)
         coloring = copy(start)
         for _ in 1:burn_in
-            random_site_sweep!(h, coloring, q, used)
+            systematic_sweep!(h, coloring, used)
         end
+        
         hits = 0
         for _ in 1:nsamples
             for _ in 1:gap
-                random_site_sweep!(h, coloring, q, used)
+                systematic_sweep!(h, coloring, used)
             end
             if coloring[x] != coloring[y]
                 hits += 1
@@ -89,6 +110,7 @@ function estimate_num_colorings(g::AbstractGraph, q::Int;
         logZ += log(hits / nsamples)
         add_edge!(h, x, y)            # pasa de G_{j-1} a G_j
     end
+
     return exp(logZ)
 end
 
